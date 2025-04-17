@@ -54,6 +54,20 @@ type JWTConfig struct {
 	Issuer        string
 }
 
+func validateConfig(config *Config) error {
+	// Validate JWT configuration
+	if config.JWT.Secret == "" {
+		return fmt.Errorf("JWT_SECRET environment variable is required")
+	}
+
+	// Validate database configuration
+	if config.Database.User == "" || config.Database.Password == "" {
+		return fmt.Errorf("database credentials (DB_USER, DB_PASSWORD) are required")
+	}
+
+	return nil
+}
+
 // LoadConfig loads configuration using Viper
 func LoadConfig() (*Config, error) {
 	// Initialize viper
@@ -66,7 +80,7 @@ func LoadConfig() (*Config, error) {
 	setDefaults(v)
 
 	// Create and return the config
-	return &Config{
+	config := &Config{
 		Server: ServerConfig{
 			Port:              v.GetString("SERVER_PORT"),
 			RequestTimeoutSec: v.GetInt("SERVER_REQUEST_TIMEOUT_SEC"),
@@ -90,7 +104,14 @@ func LoadConfig() (*Config, error) {
 			RefreshExpiry: v.GetDuration("JWT_REFRESH_EXPIRY"),
 			Issuer:        v.GetString("JWT_ISSUER"),
 		},
-	}, nil
+	}
+
+	// Add this before returning:
+	if err := validateConfig(config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // setDefaults configures all the default values for viper
@@ -113,7 +134,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("LOG_LEVEL", "info")
 
 	// JWT defaults - using the same configuration across services
-	v.SetDefault("JWT_SECRET", "your-strong-secret-key-change-in-production")
 	v.SetDefault("JWT_TOKEN_EXPIRY", "15m")
 	v.SetDefault("JWT_REFRESH_EXPIRY", "24h")
 	v.SetDefault("JWT_ISSUER", "qubool-kallyaanam-api")
