@@ -15,6 +15,7 @@ import (
 	"github.com/mohamedfawas/user-service-qubool-kallyaanam/internal/di"
 	"github.com/mohamedfawas/user-service-qubool-kallyaanam/internal/handler"
 	"github.com/mohamedfawas/user-service-qubool-kallyaanam/internal/middleware"
+	"github.com/mohamedfawas/user-service-qubool-kallyaanam/pkg/database"
 	"go.uber.org/zap"
 )
 
@@ -42,13 +43,9 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestLogger(container.Logger))
 
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "UP",
-			"service": "user-service",
-		})
-	})
+	// Register health check routes
+	healthHandler := handler.NewHealthHandler(container.DB, container.Logger)
+	healthHandler.RegisterRoutes(router)
 
 	// API routes
 	api := router.Group("/api/v1")
@@ -60,6 +57,15 @@ func main() {
 	// Register profile handler routes
 	userProfileHandler := handler.NewUserProfileHandler(container.UserProfileService, container.Logger)
 	userProfileHandler.RegisterRoutes(userRoutes)
+
+	// Run database migrations
+	if cfg.Database.RunMigrations {
+		container.Logger.Info("Running database migrations")
+		if err := database.RunMigrations(cfg.Database.DSN()); err != nil {
+			container.Logger.Fatal("Failed to run database migrations", zap.Error(err))
+		}
+		container.Logger.Info("Database migrations completed")
+	}
 
 	// Start the server
 	srv := &http.Server{

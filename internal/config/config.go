@@ -2,9 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
+	"time"
+
+	"github.com/spf13/viper"
 )
 
 // Config represents the application configuration
@@ -12,6 +12,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Logging  LoggingConfig
+	JWT      JWTConfig
 }
 
 // ServerConfig contains server related settings
@@ -22,12 +23,13 @@ type ServerConfig struct {
 
 // DatabaseConfig contains database connection settings
 type DatabaseConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	Host          string
+	Port          int
+	User          string
+	Password      string
+	DBName        string
+	SSLMode       string
+	RunMigrations bool
 }
 
 // DSN returns the database connection string
@@ -44,78 +46,81 @@ type LoggingConfig struct {
 	LogLevel      string
 }
 
-// NewConfig creates a new configuration with default values
-func NewConfig() *Config {
-	return &Config{
-		Server: ServerConfig{
-			Port:              "8082",
-			RequestTimeoutSec: 30,
-		},
-		Database: DatabaseConfig{
-			Host:     "localhost",
-			Port:     5432,
-			User:     "postgres",
-			Password: "postgres",
-			DBName:   "qubool_kallyanam",
-			SSLMode:  "disable",
-		},
-		Logging: LoggingConfig{
-			IsDevelopment: true,
-			LogLevel:      "info",
-		},
-	}
+// JWTConfig holds JWT-related configuration
+type JWTConfig struct {
+	Secret        string
+	TokenExpiry   time.Duration
+	RefreshExpiry time.Duration
+	Issuer        string
 }
 
-// LoadConfig loads configuration from environment variables
+// LoadConfig loads configuration using Viper
 func LoadConfig() (*Config, error) {
-	config := NewConfig()
+	// Initialize viper
+	v := viper.New()
 
-	// Server config
-	if port := os.Getenv("SERVER_PORT"); port != "" {
-		config.Server.Port = port
-	}
+	// Set up viper to read environment variables
+	v.AutomaticEnv()
 
-	if timeout := os.Getenv("SERVER_REQUEST_TIMEOUT_SEC"); timeout != "" {
-		if value, err := strconv.Atoi(timeout); err == nil {
-			config.Server.RequestTimeoutSec = value
-		}
-	}
+	// Set default values
+	setDefaults(v)
 
-	// Database config
-	if host := os.Getenv("DB_HOST"); host != "" {
-		config.Database.Host = host
-	}
+	// Create and return the config
+	return &Config{
+		Server: ServerConfig{
+			Port:              v.GetString("SERVER_PORT"),
+			RequestTimeoutSec: v.GetInt("SERVER_REQUEST_TIMEOUT_SEC"),
+		},
+		Database: DatabaseConfig{
+			Host:          v.GetString("DB_HOST"),
+			Port:          v.GetInt("DB_PORT"),
+			User:          v.GetString("DB_USER"),
+			Password:      v.GetString("DB_PASSWORD"),
+			DBName:        v.GetString("DB_NAME"),
+			SSLMode:       v.GetString("DB_SSL_MODE"),
+			RunMigrations: v.GetBool("DB_RUN_MIGRATIONS"),
+		},
+		Logging: LoggingConfig{
+			IsDevelopment: v.GetBool("LOG_DEVELOPMENT"),
+			LogLevel:      v.GetString("LOG_LEVEL"),
+		},
+		JWT: JWTConfig{
+			Secret:        v.GetString("JWT_SECRET"),
+			TokenExpiry:   v.GetDuration("JWT_TOKEN_EXPIRY"),
+			RefreshExpiry: v.GetDuration("JWT_REFRESH_EXPIRY"),
+			Issuer:        v.GetString("JWT_ISSUER"),
+		},
+	}, nil
+}
 
-	if port := os.Getenv("DB_PORT"); port != "" {
-		if value, err := strconv.Atoi(port); err == nil {
-			config.Database.Port = value
-		}
-	}
+// setDefaults configures all the default values for viper
+func setDefaults(v *viper.Viper) {
+	// Server defaults
+	v.SetDefault("SERVER_PORT", "8082")
+	v.SetDefault("SERVER_REQUEST_TIMEOUT_SEC", 30)
 
-	if user := os.Getenv("DB_USER"); user != "" {
-		config.Database.User = user
-	}
+	// Database defaults
+	v.SetDefault("DB_HOST", "localhost")
+	v.SetDefault("DB_PORT", 5432)
+	v.SetDefault("DB_USER", "postgres")
+	v.SetDefault("DB_PASSWORD", "postgres")
+	v.SetDefault("DB_NAME", "user_db")
+	v.SetDefault("DB_SSL_MODE", "disable")
+	v.SetDefault("DB_RUN_MIGRATIONS", true)
 
-	if password := os.Getenv("DB_PASSWORD"); password != "" {
-		config.Database.Password = password
-	}
+	// Logging defaults
+	v.SetDefault("LOG_DEVELOPMENT", true)
+	v.SetDefault("LOG_LEVEL", "info")
 
-	if dbName := os.Getenv("DB_NAME"); dbName != "" {
-		config.Database.DBName = dbName
-	}
+	// JWT defaults - using the same configuration across services
+	v.SetDefault("JWT_SECRET", "your-strong-secret-key-change-in-production")
+	v.SetDefault("JWT_TOKEN_EXPIRY", "15m")
+	v.SetDefault("JWT_REFRESH_EXPIRY", "24h")
+	v.SetDefault("JWT_ISSUER", "qubool-kallyaanam-api")
+}
 
-	if sslMode := os.Getenv("DB_SSL_MODE"); sslMode != "" {
-		config.Database.SSLMode = sslMode
-	}
-
-	// Logging config
-	if isDev := os.Getenv("LOG_DEVELOPMENT"); isDev != "" {
-		config.Logging.IsDevelopment = strings.ToLower(isDev) == "true"
-	}
-
-	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
-		config.Logging.LogLevel = logLevel
-	}
-
-	return config, nil
+// NewConfig creates a new configuration with default values - kept for backward compatibility
+func NewConfig() *Config {
+	config, _ := LoadConfig()
+	return config
 }

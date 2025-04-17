@@ -1,3 +1,4 @@
+-- Create extension for UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create enum types for fixed-choice fields
@@ -17,25 +18,14 @@ CREATE TYPE marital_status_type AS ENUM (
     'Never married', 'Widower', 'Divorced', 'Nikah Divorce'
 );
 
--- Enum for the 14 districts in Kerala
+-- Enum for Kerala districts
 CREATE TYPE home_district_type AS ENUM (
-    'Thiruvananthapuram',
-    'Kollam',
-    'Pathanamthitta',
-    'Alappuzha',
-    'Kottayam',
-    'Idukki',
-    'Ernakulam',
-    'Thrissur',
-    'Palakkad',
-    'Malappuram',
-    'Kozhikode',
-    'Wayanad',
-    'Kannur',
-    'Kasaragod'
+    'Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha',
+    'Kottayam', 'Idukki', 'Ernakulam', 'Thrissur', 'Palakkad',
+    'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'
 );
 
--- Create user_profiles table
+-- Create user_profiles table without foreign key constraint
 CREATE TABLE IF NOT EXISTS user_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
@@ -54,12 +44,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP,
     
-    -- Foreign key to users table
-    CONSTRAINT fk_user_profiles_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id) ON DELETE CASCADE,
-        
-    -- Ensure one profile per user
+    -- Ensure one profile per user (without foreign key)
     CONSTRAINT unique_user_profile UNIQUE (user_id)
 );
 
