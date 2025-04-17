@@ -21,7 +21,8 @@ type UserClaims struct {
 	jwt.RegisteredClaims
 }
 
-// JWTAuthMiddleware creates a middleware for JWT authentication
+// user-service-qubool-kallyaanam/internal/middleware/jwt.go
+
 func JWTAuthMiddleware(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First check if we have user info from gateway in headers
@@ -64,12 +65,19 @@ func JWTAuthMiddleware(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 		tokenString := parts[1]
 
-		// Parse the token
+		// Parse the token with improved validation
 		token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-			// Validate signing algorithm
+			// Validate signing algorithm (explicit check for security)
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
+
+			// Check the 'kid' header if present (for future key rotation)
+			if kid, ok := token.Header["kid"].(string); ok {
+				logger.Debug("Token key ID", zap.String("kid", kid))
+				// We currently use just one key, but this can be extended for key rotation
+			}
+
 			return []byte(cfg.JWT.Secret), nil
 		})
 
@@ -86,6 +94,14 @@ func JWTAuthMiddleware(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			if err != nil || expirationTime == nil || expirationTime.Before(time.Now()) {
 				logger.Debug("Token expired")
 				c.JSON(401, gin.H{"error": "Token expired"})
+				c.Abort()
+				return
+			}
+
+			// Validate required claims are present
+			if claims.UserID == "" {
+				logger.Debug("Missing required claim: user_id")
+				c.JSON(401, gin.H{"error": "Invalid token: missing required claims"})
 				c.Abort()
 				return
 			}
